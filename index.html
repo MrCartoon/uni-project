@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Логістичний Планувальник Маршрутів</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/material-components-web@latest/dist/material-components-web.min.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+
+        #graph {
+            position: absolute;
+            z-index: -1;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            margin: 0 0;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .mdc-text-field {
+            margin: 10px;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        #plan-route {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 20px;
+            font-size: 18px;
+            color: #fff;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #plan-route:hover {
+            background-color: #0056b3;
+        }
+
+        @media (max-width: 768px) {
+            #plan-route {
+                font-size: 16px;
+                padding: 10px;
+                margin: 10px;
+            }
+        }
+
+        #sidebar {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            border-right: 1px solid #dee2e6;
+            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+
+        @media (min-width: 769px) {
+            #sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div id="sidebar" class="d-flex flex-column justify-content-center align-items-center p-3 bg-light">
+            <h1 class="mdc-typography--headline4 text-center mb-4">Логістичний Планувальник Маршрутів</h1>
+            <div class="custom-file mb-3">
+                <input type="file" class="custom-file-input" id="file-input" accept=".csv">
+                <label class="custom-file-label" for="file-input">Оберіть файл</label>
+            </div>
+            <input type="text" value="Ternopil" id="start-point" class="form-control mb-3"
+                placeholder="Початкова точка">
+            <input type="text" value="Kherson" id="end-point" class="form-control mb-3" placeholder="Кінцева точка">
+            <button id="plan-route" class="btn btn-primary">Планувати маршрут</button>
+
+        </div>
+        <div id="graph"></div>
+    </div>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/material-components-web@latest/dist/material-components-web.min.js"></script>
+    <script>mdc.autoInit()</script>
+    <script>
+        // browser-sync start --server --files "**/*"
+        let graphData, network, csvData;
+
+        const nodes = new vis.DataSet();
+        const edges = new vis.DataSet();
+
+        window.onload = function () {
+            fetch('graph.csv')
+                .then(response => response.text())
+                .then(data => {
+                    csvData = data;
+                    graphData = createGraphFromCSV(data);
+                    createGraphVisualization(graphData);
+                });
+        };
+
+        document.getElementById('file-input').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                csvData = event.target.result;
+                graphData = createGraphFromCSV(csvData);
+                createGraphVisualization(graphData);
+            };
+
+            reader.readAsText(file);
+        });
+
+        function createGraphFromCSV(csvData) {
+            const nodeSet = new Set();
+            const lines = csvData.split('\n');
+
+            lines.forEach((line) => {
+                const [source, target, weight] = line.split(',');
+                if (!nodeSet.has(source)) {
+                    nodes.add({ id: source, label: source });
+                    nodeSet.add(source);
+                }
+                if (!nodeSet.has(target)) {
+                    nodes.add({ id: target, label: target });
+                    nodeSet.add(target);
+                }
+                edges.add({ id: `${source}-${target}`, from: source, to: target, label: weight });
+            });
+
+            return { nodes, edges };
+        }
+
+        function createGraphVisualization(graphData) {
+            const container = document.getElementById('graph');
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 15
+                },
+                edges: {
+                    smooth: true,
+                },
+                physics: {
+                    enabled: true
+                }
+            };
+            network = new vis.Network(container, graphData, options);
+        }
+
+        // Алгоритм Дейкстри
+        function findShortestPath(graph, start, end) {
+            let shortestDistances = {};
+            let parents = {};
+            let unvisitedNodes = Object.keys(graph);
+
+            for (let node of unvisitedNodes) {
+                shortestDistances[node] = Infinity;
+            }
+            shortestDistances[start] = 0;
+
+            while (unvisitedNodes.length > 0) {
+                let closestNode = null;
+
+                for (let node of unvisitedNodes) {
+                    if (closestNode === null || shortestDistances[node] < shortestDistances[closestNode]) {
+                        closestNode = node;
+                    }
+                }
+
+                let currentNodeDist = shortestDistances[closestNode];
+                for (let neighbor in graph[closestNode]) {
+                    let distanceToNeighbor = graph[closestNode][neighbor];
+                    let totalDistance = currentNodeDist + distanceToNeighbor;
+
+                    if (totalDistance < shortestDistances[neighbor]) {
+                        shortestDistances[neighbor] = totalDistance;
+                        parents[neighbor] = closestNode;
+                    }
+                }
+
+                unvisitedNodes = unvisitedNodes.filter(node => node !== closestNode);
+            }
+
+            let shortestPath = [end];
+            let parent = parents[end];
+            while (parent) {
+                shortestPath.push(parent);
+                parent = parents[parent];
+            }
+            shortestPath.reverse();
+
+            return {
+                distance: shortestDistances[end],
+                path: shortestPath
+            };
+        }
+
+        function csvToGraph(csvData) {
+            let graph = {};
+            for (let row of csvData) {
+                let [pointA, pointB, distance] = row.split(',');
+                distance = Number(distance);
+
+                if (!graph[pointA]) {
+                    graph[pointA] = {};
+                }
+                graph[pointA][pointB] = distance;
+
+                if (!graph[pointB]) {
+                    graph[pointB] = {};
+                }
+                graph[pointB][pointA] = distance;
+            }
+            return graph;
+        }
+
+        function highlightPath(path) {
+            for (let i = 0; i < path.length - 1; i++) {
+                let edgeId = `${path[i]}-${path[i + 1]}`;
+                let edge = network.body.edges[edgeId];
+                if (!edge) {
+                    edgeId = `${path[i + 1]}-${path[i]}`;
+                    edge = network.body.edges[edgeId];
+                }
+                if (edge) {
+                    edges.update({ id: edgeId, color: { color: '#FF0000' } });
+                }
+            }
+        }
+
+        document.getElementById('plan-route').addEventListener('click', function () {
+            let start = document.getElementById('start-point').value;
+            let end = document.getElementById('end-point').value;
+
+            let graph = csvToGraph(csvData.split('\n'));
+
+            let result = findShortestPath(graph, start, end);
+            highlightPath(result.path);
+        });
+    </script>
+</body>
+
+</html>
