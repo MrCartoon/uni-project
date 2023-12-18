@@ -128,10 +128,9 @@
     <script>mdc.autoInit()</script>
     <script>
         // browser-sync start --server --files "**/*"
-        let graphData, network, csvData;
+        let graphData, network, csvData, nodes, edges;
 
-        const nodes = new vis.DataSet();
-        const edges = new vis.DataSet();
+
 
         window.onload = function () {
             fetch('graph.csv')
@@ -160,6 +159,8 @@
         });
 
         function createGraphFromCSV(csvData) {
+            nodes = new vis.DataSet();
+            edges = new vis.DataSet();
             const nodeSet = new Set();
             const lines = csvData.split('\n');
 
